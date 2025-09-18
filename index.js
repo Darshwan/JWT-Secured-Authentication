@@ -88,3 +88,64 @@ app.post('/api/register', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 })
+
+//  USER LOGIN ENDPOINT
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Please provide email and password' });
+    }
+
+    const user = await User.findOne({ email }).select('+password +isVerified');
+    if (!user || !(await user.correctPassword(password, user.password))) {
+      return res.status(401).json({ error: 'Incorrect email or password' });
+    }
+
+    if (!user.isVerified) {
+      return res.status(403).json({ error: 'Please verify your email address before logging in.' });
+    }
+
+    const token = generateToken(user._id);
+
+    user.password = undefined;
+
+    res.status(200).json({
+      status: 'success',
+      token,
+      data: {
+        user
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// EMAIL VERIFICATION ENDPOINT
+app.get('/verify', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token is required' });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { verificationToken: token },
+      { isVerified: true, verificationToken: undefined },
+      { new: true } 
+    );
+
+    if (!user) {
+      return res.status(400).json({ error: 'Token is invalid or has expired' });
+    }
+
+    res.send('<h1>Email successfully verified! You can now log in.</h1>');
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});

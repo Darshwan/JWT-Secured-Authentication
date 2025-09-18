@@ -4,7 +4,9 @@
   "description": "A standalone, reusable microservice that handles user registration, login, JWT-based authentication, and email verification for applications",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "repository": {
     "type": "git",

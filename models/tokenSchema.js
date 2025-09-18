@@ -14,4 +14,4 @@ const tokenSchema = new mongoose.Schema({
 tokenSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
 
 const Token = mongoose.model('Token', tokenSchema);
-module.exports = Token;
+export default Token;

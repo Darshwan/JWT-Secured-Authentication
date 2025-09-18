@@ -2,9 +2,11 @@ import 'dotenv/config'
 import { configDotenv } from 'dotenv'
 import express from 'express'
 import { connectDB } from './config/database.js'
-import Token from './models/Token.js'
+import User from './models/userModel.js'
 import jwt from 'jsonwebtoken'
-import User from './models/User.js'
+import Token from './models/tokenSchema.js'
+import verificationToken from 'crypto'
+import sendVerificationEmail from './services/emailService.js'
 
 connectDB()
 const app = express()
@@ -54,3 +56,35 @@ const authenticateToken = async (req, res, next) => {
     res.status(500).json({ error: 'Internal server error during authentication' });
   }    
 }
+
+// USER REGISTRATION ENDPOINT
+app.post('/api/register', async (req, res) => {
+  const {email, password} = req.body
+  if(!email || !password) {
+    return res.status(400).json({error: 'Email and password are required'})
+  }
+  try {
+    const existingUser = await User.findOne({ email })
+    if(existingUser){
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+    
+    const finalVerificationToken = verificationToken.randomBytes(32).toString('hex')
+    const newUser = new User({ email, password , finalVerificationToken})
+    sendVerificationEmail(newUser.email, finalVerificationToken)
+
+    res.status(201).json({ 
+      message: 'User registered successfully. Please verify your email.',
+      userId: newUser._id
+    })
+
+  }
+  catch (error) {
+    if(error.name === 'ValidationError') {
+     const error = Object.values(error.errors).map(er => er.message) 
+     return res.status(400).json({ error: errors.join(', ') });
+    }
+    console.error('Error during user registration:', error)
+    res.status(500).json({ error: 'Internal server error' });
+  }
+})

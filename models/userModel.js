@@ -36,4 +36,4 @@ userSchema.methods.correctPassword = async function(candidatePassword, userPassw
 
 // Create and export the Model
 const User = mongoose.model('User', userSchema);
-module.exports = User;
+export default User;

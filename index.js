@@ -5,7 +5,7 @@ import { connectDB } from './config/database.js'
 import User from './models/userModel.js'
 import jwt from 'jsonwebtoken'
 import Token from './models/tokenSchema.js'
-import verificationToken from 'crypto'
+import crypto from 'crypto';
 import sendVerificationEmail from './services/emailService.js'
 
 connectDB()
@@ -22,7 +22,7 @@ app.listen(process.env.PORT, () => {
     console.log(`Server running on port ${process.env.PORT}`)
 })
 
-function generateToken() {
+function generateToken(userId) {
   return jwt.sign({ id: userId}, process.env.JWT_SECRET, { expiresIn: '1h' })
 }
 
@@ -59,30 +59,56 @@ const authenticateToken = async (req, res, next) => {
 
 // USER REGISTRATION ENDPOINT
 app.post('/api/register', async (req, res) => {
-  const {email, password} = req.body
-  if(!email || !password) {
-    return res.status(400).json({error: 'Email and password are required'})
-  }
   try {
-    const existingUser = await User.findOne({ email })
-    if(existingUser){
-      return res.status(400).json({ error: 'User with this email already exists' });
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
     }
-    
-    const finalVerificationToken = verificationToken.randomBytes(32).toString('hex')
-    const newUser = new User({ email, password , finalVerificationToken})
-    sendVerificationEmail(newUser.email, finalVerificationToken)
 
-    res.status(201).json({ 
-      message: 'User registered successfully. Please verify your email.',
-      userId: newUser._id
-    })
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      if (!existingUser.isVerified) {
+        // Regenerate verification token
+        const newVerificationToken = crypto.randomBytes(32).toString('hex');
+        existingUser.password = await bcrypt.hash(password, 10);
+        existingUser.verificationToken = newVerificationToken;
+        await existingUser.save();
 
-  }
-  catch (error) {
-    if(error.name === 'ValidationError') {
-     const error = Object.values(error.errors).map(er => er.message) 
-     return res.status(400).json({ error: errors.join(', ') });
+        await sendVerificationEmail(existingUser.email, newVerificationToken);
+
+        return res.status(200).json({
+          message: 'A new verification email has been sent.',
+          userId: existingUser._id,
+        });
+      }
+      return res.status(409).json({ error: 'User already exists with this email' });
+    }
+
+    // ✅ Create new user
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+
+    const newUser = new User({
+      email,
+      password,
+      verificationToken,
+    });
+
+    await newUser.save();
+
+    await sendVerificationEmail(newUser.email, verificationToken);
+
+    res.status(201).json({
+      message: 'User created successfully. Please verify your account via email.',
+      userId: newUser._id,
+    });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(el => el.message);
+      return res.status(400).json({ error: errors.join(', ') });
     }
     console.error('Error during user registration:', error)
     res.status(500).json({ error: 'Internal server error' });
@@ -90,7 +116,7 @@ app.post('/api/register', async (req, res) => {
 })
 
 //  USER LOGIN ENDPOINT
-app.post('/login', async (req, res) => {
+app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -98,7 +124,7 @@ app.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Please provide email and password' });
     }
 
-    const user = await User.findOne({ email }).select('+password +isVerified');
+    const user = await User.findOne({ email });
     if (!user || !(await user.correctPassword(password, user.password))) {
       return res.status(401).json({ error: 'Incorrect email or password' });
     }
@@ -109,8 +135,7 @@ app.post('/login', async (req, res) => {
 
     const token = generateToken(user._id);
 
-    user.password = undefined;
-
+    user.verificationToken = undefined;
     res.status(200).json({
       status: 'success',
       token,
@@ -125,7 +150,7 @@ app.post('/login', async (req, res) => {
 });
 
 // EMAIL VERIFICATION ENDPOINT
-app.get('/verify', async (req, res) => {
+app.get('/api/verify', async (req, res) => {
   try {
     const { token } = req.query;
 
@@ -133,19 +158,37 @@ app.get('/verify', async (req, res) => {
       return res.status(400).json({ error: 'Verification token is required' });
     }
 
-    const user = await User.findOneAndUpdate(
-      { verificationToken: token },
-      { isVerified: true, verificationToken: undefined },
-      { new: true } 
-    );
+    const verifiedUser = await User.findOne({ verificationToken: token });
+    verifiedUser.isVerified = true;
+    verifiedUser.verificationToken = undefined;
+    await verifiedUser.save();
+    Token.findOneAndDelete({ token })
 
-    if (!user) {
+    if (!verifiedUser) {
       return res.status(400).json({ error: 'Token is invalid or has expired' });
     }
-
+    console.log('User verified:', verifiedUser._doc);
     res.send('<h1>Email successfully verified! You can now log in.</h1>');
   } catch (error) {
     console.error('Verification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// LOGOUT ENDPOINT
+app.post('/api/logout', authenticateToken, async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    await Token.create({ token });
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Successfully logged out'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

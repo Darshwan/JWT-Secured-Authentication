@@ -1,0 +1,28 @@
+{
+  "name": "jwt-secured-authentication",
+  "version": "1.0.0",
+  "description": "A standalone, reusable microservice that handles user registration, login, JWT-based authentication, and email verification for applications",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Darshwan/JWT-Secured-Authentication.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Darshwan/JWT-Secured-Authentication/issues"
+  },
+  "homepage": "https://github.com/Darshwan/JWT-Secured-Authentication#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.18.1",
+    "nodemon": "^3.1.10"
+  }
+}

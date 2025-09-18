@@ -1,4 +1,5 @@
 import mongoose from 'mongoose'
+import bcrypt from 'bcryptjs'
 
 const userSchema = new mongoose.Schema({
     email: {
@@ -21,3 +22,18 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 }
 )
+// Hashing the password before saving the user 
+userSchema.pre('save', async function (next) {
+    if(!this.isModified('password')) return next();
+    
+    this.password = await bcrypt.hash(this.password, 12)
+    next()
+})
+// Instance method to check password candidate
+userSchema.methods.correctPassword = async function(candidatePassword, userPassword) {
+  return await bcrypt.compare(candidatePassword, userPassword);
+};
+
+// Create and export the Model
+const User = mongoose.model('User', userSchema);
+module.exports = User;
